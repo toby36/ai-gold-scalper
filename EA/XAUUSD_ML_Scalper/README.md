@@ -39,9 +39,11 @@ Include/XAUUSD_ML_Scalper/
   Common.mqh         <- shared helpers
 Scripts/XAUUSD_ML_Scalper/ExportHistoryCSV.mq5     <- exports broker M1 history to CSV
 python/
-  train_model.py        <- trains the MLP on the exported CSV, exports MQL5 weights
-  backtest_simulator.py <- Python re-implementation of the EA's risk/signal logic
+  train_model.py         <- trains the MLP on the exported CSV, exports MQL5 weights
+  backtest_simulator.py  <- Python re-implementation of the EA's risk/signal logic
+  download_from_mt5.py   <- pulls bars/ticks straight from a running MT5 terminal
   requirements.txt
+  requirements-mt5.txt   <- optional, Windows-only, for download_from_mt5.py
 ```
 
 `Experts/`, `Include/` and `Scripts/` mirror the layout MetaTrader expects
@@ -90,14 +92,46 @@ natively in MQL5 on every closed M1 bar.
 4. With the placeholder weights, it will run but never trade — see
    "Training" below before expecting any signals.
 
+## Getting history data
+
+Two ways to get a CSV in the `time,open,high,low,close,tick_volume` format
+`train_model.py` expects — use whichever is more convenient:
+
+**Option A — MQL5 script (works from inside MetaTrader, any OS the terminal runs on).**
+Attach the `ExportHistoryCSV` script (in `Scripts/XAUUSD_ML_Scalper/`, once
+copied into your `MQL5/Scripts/` folder) to an XAUUSD chart. It writes
+`MQL5/Files/<SYMBOL>_M1_history.csv` in your terminal's data folder.
+
+**Option B — `python/download_from_mt5.py` (no manual chart step, can also pull raw ticks).**
+Uses the official `MetaTrader5` Python package to pull history straight from
+a running, logged-in MT5 terminal. This only works run from the *same
+machine* as that terminal (Windows, or MT5-under-Wine) — the package is a
+thin wrapper around the terminal process itself, it does not talk to a
+broker on its own, and it will not install on Linux/macOS (so it can't run
+in this repo's dev sandbox either — see "What was actually validated" below).
+```
+pip install -r python/requirements-mt5.txt
+
+# last 90 days of M1 bars
+python python/download_from_mt5.py --symbol XAUUSD --timeframe M1 --days 90 \
+    --out XAUUSD_M1_history.csv
+
+# raw tick data for a date range (most brokers retain far less tick history than bar history)
+python python/download_from_mt5.py --symbol XAUUSD --mode ticks \
+    --from 2026-06-01 --to 2026-07-01 --out XAUUSD_ticks.csv
+```
+If the terminal isn't already logged in, pass `--login`, `--password` and
+`--server`; otherwise just log in by hand first and omit those flags.
+`train_model.py` currently consumes bar data — the tick CSV is there for
+your own analysis/backtesting, not (yet) as direct training input.
+
+Use as much M1 history as your broker actually retains — a few weeks is a
+bare minimum smoke test, several months to a year is what you need for a
+real attempt.
+
 ## Training on real history
 
-1. Attach the `ExportHistoryCSV` script (in `Scripts/XAUUSD_ML_Scalper/`,
-   once copied into your `MQL5/Scripts/` folder) to an XAUUSD chart. It
-   writes `MQL5/Files/<SYMBOL>_M1_history.csv` in your terminal's data folder.
-   Use as much M1 history as your broker actually retains — a few weeks is
-   a bare minimum smoke test, several months to a year is what you need
-   for a real attempt.
+1. Get a history CSV via Option A or B above.
 2. `pip install -r python/requirements.txt`
 3. `python python/train_model.py --csv <SYMBOL>_M1_history.csv --output MLModel_trained.mqh`
 4. Read the printed out-of-sample accuracy/precision/recall **before doing
@@ -150,6 +184,12 @@ so **no real XAUUSD data was available here**. What was verified instead:
   configured risk %, and the run **halted itself at the configured 20%
   drawdown cap** instead of continuing to bleed the account — i.e. the
   kill switch works.
+- `download_from_mt5.py` was syntax-checked and its CLI/argument handling
+  was exercised, but it could **not** be run end-to-end here: the
+  `MetaTrader5` package only ships Windows wheels and there is no MT5
+  terminal in this Linux sandbox to connect to. Run it yourself on the
+  machine where your terminal lives, and sanity-check the first CSV it
+  produces before trusting it for training.
 - The MQL5 source was reviewed manually for correctness (indicator buffer
   indices, array bounds, order-fill handling) but **was not compiled by an
   actual MetaEditor/MT5 instance**, since none is available in this
