@@ -20,6 +20,13 @@ For comprehensive documentation, installation guides, system architecture, and u
 
 ---
 
+## 🥷 NinjaTrader 8 – FundedNext Flex 50K bot
+
+Önálló NinjaScript stratégia (ORB + Noise-Area momentum, ML meta-labeling, prop-firm kockázatkezelés):
+**➡️ [ninjatrader/FlexChallengeBot](ninjatrader/FlexChallengeBot/README.md)**
+
+---
+
 ## 🚀 Quick Start
 
 ```bash
